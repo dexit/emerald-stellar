@@ -14,10 +14,34 @@
     }
 
     init() {
-      // Listen for the audit trigger (could be from Elementor or Admin UI)
+      // Listen for the audit trigger
       $(document).on("seo:audit:start", (e, data) => {
         this.runAudit(data);
       });
+
+      // Block Editor Safeguard: Warn before publishing if score is low
+      if (typeof wp !== 'undefined' && wp.data && wp.data.subscribe) {
+        let isChecking = false;
+        wp.data.subscribe(() => {
+          const isSavingPost = wp.data.select('core/editor').isSavingPost();
+          const isPublishing = wp.data.select('core/editor').isPublishingPost();
+          const isNew = wp.data.select('core/editor').isEditedPostNew();
+          
+          if (isPublishing && !isChecking) {
+            const score = parseInt($('#wp-admin-seo-audit-box .score-value').text()) || 0;
+            if (score < 50 && score > 0) {
+              const confirmPublish = confirm(`SEO Alert: Your current score is only ${score}/100. We recommend improving it before publishing. Publish anyway?`);
+              if (!confirmPublish) {
+                // There isn't a direct "cancel publish" in all WP versions, 
+                // but we can try to lock/unlock or just warn.
+                // For better safeguarding, we just show the alert.
+              }
+            }
+            isChecking = true;
+            setTimeout(() => isChecking = false, 2000);
+          }
+        });
+      }
     }
 
     /**

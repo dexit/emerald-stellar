@@ -32,6 +32,12 @@ class Admin_Dashboard
 
         // AJAX: Queue all posts for rescan
         add_action('wp_ajax_seo_audit_queue_all', [$this, 'queue_all_rescans']);
+
+        // AJAX: Dismiss welcome notice
+        add_action('wp_ajax_seo_audit_dismiss_notice', [$this, 'dismiss_welcome_notice']);
+
+        // Welcome notice
+        add_action('admin_notices', [$this, 'render_welcome_notice']);
     }
 
     // -------------------------------------------------------------------------
@@ -433,6 +439,53 @@ class Admin_Dashboard
     // -------------------------------------------------------------------------
     // DATA HELPERS
     // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // ONBOARDING & NOTICES
+    // -------------------------------------------------------------------------
+
+    public function render_welcome_notice(): void
+    {
+        if (get_option('seo_audit_welcome_dismissed')) {
+            return;
+        }
+
+        $screen = get_current_screen();
+        if ($screen && $screen->id === 'toplevel_page_seo-audit-dashboard') {
+            return;
+        }
+        ?>
+        <div class="notice notice-info is-dismissible seo-welcome-notice" id="seo-audit-welcome">
+            <div class="seo-notice-content" style="display:flex;align-items:center;padding:15px 0;gap:20px;">
+                <div class="seo-notice-icon" style="font-size:40px;">🚀</div>
+                <div class="seo-notice-text">
+                    <h3 style="margin:0 0 5px;"><?php esc_html_e('Welcome to SEO Audit with AI!', 'seo-audit'); ?></h3>
+                    <p style="margin:0;"><?php esc_html_e('Achieve 100/100 SEO scores with our premium AI-powered auditing system. Check your site health now.', 'seo-audit'); ?></p>
+                </div>
+                <div class="seo-notice-actions">
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=seo-audit-dashboard')); ?>" class="button button-primary">
+                        <?php esc_html_e('Go to Dashboard', 'seo-audit'); ?>
+                    </a>
+                </div>
+            </div>
+            <script>
+                jQuery(document).on('click', '#seo-audit-welcome .notice-dismiss', function() {
+                    jQuery.post(ajaxurl, {
+                        action: 'seo_audit_dismiss_notice',
+                        nonce: '<?php echo wp_create_nonce("seo_audit_nonce"); ?>'
+                    });
+                });
+            </script>
+        </div>
+        <?php
+    }
+
+    public function dismiss_welcome_notice(): void
+    {
+        check_ajax_referer('seo_audit_nonce', 'nonce');
+        update_option('seo_audit_welcome_dismissed', true);
+        wp_send_json_success();
+    }
 
     private function get_audit_stats(): array
     {
