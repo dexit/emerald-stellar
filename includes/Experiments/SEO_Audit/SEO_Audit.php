@@ -152,28 +152,21 @@ class SEO_Audit extends Abstract_Experiment
         $content = isset($_POST['content']) ? wp_kses_post($_POST['content']) : '';
         $url     = isset($_POST['url'])     ? esc_url($_POST['url'])          : '';
         $post_id = isset($_POST['post_id']) ? intval($_POST['post_id'])        : 0;
+        $title   = isset($_POST['title'])   ? sanitize_text_field($_POST['title']) : '';
+        $desc    = isset($_POST['meta_description']) ? sanitize_text_field($_POST['meta_description']) : '';
 
         if (empty($content)) {
             wp_send_json_error(['message' => __('No content provided for audit.', 'seo-audit')]);
         }
 
-        // 1. Traditional SEO checks
-        $results = $this->perform_traditional_audit($content, $url);
+        $audit_service = new \SEOAudit\Services\Audit_Service();
+        $results = $audit_service->perform_full_audit($content, $url, [
+            'title' => $title,
+            'meta_description' => $desc,
+            'post_id' => $post_id
+        ]);
 
-        // 2. Full Readability Analysis
-        $readability_auditor       = new \SEOAudit\Audits\EnhancedReadabilityAuditor();
-        $results['readability']    = $readability_auditor->analyze_content($content);
-
-        // 3. PageSpeed Insights (if URL provided)
-        if (!empty($url)) {
-            $ps_auditor = new \SEOAudit\Audits\PageSpeedAuditor();
-            $ps_results = $ps_auditor->analyze_url($url);
-            if ($ps_results) {
-                $results['ui']['pageInsights'] = $ps_results;
-            }
-        }
-
-        // 4. Persist lightweight scores to post meta for dashboard history
+        // Persist lightweight scores to post meta for dashboard history
         if ($post_id > 0 && current_user_can('edit_post', $post_id)) {
             $seo_checks    = $results['seo'] ?? [];
             $passed_count  = count(array_filter($seo_checks, fn($c) => !empty($c['passed'])));
@@ -193,60 +186,6 @@ class SEO_Audit extends Abstract_Experiment
 
         wp_send_json_success($results);
     }
-
-    private function perform_traditional_audit($content, $url)
-    {
-        $audit = [];
-        $plain_content = wp_strip_all_tags($content);
-        $title = isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '';
-        $desc = isset($_POST['meta_description']) ? sanitize_text_field($_POST['meta_description']) : '';
-        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
-
-        // Initialize Crawler & Specialized Auditors
-        $crawler = new \Symfony\Component\DomCrawler\Crawler($content);
-        $keyword_auditor = new \SEOAudit\Audits\KeywordAuditor();
-        $readability_auditor = new \SEOAudit\Audits\EnhancedReadabilityAuditor();
-        
-        // Use the centralized SEO Core for deeper analysis
-        $seo_core = new \SEOAudit\SEOAuditCore();
-
-        // 1. URL CHECKS (Expanded using SEO Core)
-        if (!empty($url)) {
-            $audit['urlLowercase'] = $seo_core->url_uppercase($url);
-            $audit['urlUnderscores'] = $seo_core->url_underscores($url);
-            $audit['urlLength'] = $seo_core->url_over_115_characters($url);
-            $audit['urlParameters'] = $seo_core->url_parameters($url);
-            $audit['canonicalCheck'] = $seo_core->canonicals_missing($url);
-        }
-
-        // 2. TECHNICAL & TAG CHECKS
-        $audit['langCheck'] = [
-            'passed' => $crawler->filter('html[lang]')->count() > 0,
-            'shortAnswer' => 'Language Attribute',
-            'recommendation' => 'The <html> tag should have a lang attribute.'
-        ];
-        
-        $audit['hasMobileViewports'] = [
-            'passed' => $crawler->filter('meta[name="viewport"]')->count() > 0,
-            'shortAnswer' => 'Mobile Viewport',
-            'recommendation' => 'Add a viewport meta tag for mobile responsiveness.'
-        ];
-        $audit['faviconCheck'] = [
-            'passed' => $crawler->filter('link[rel*="icon"]')->count() > 0,
-            'shortAnswer' => 'Favicon Check'
-        ];
-
-        // 3. CODE QUALITY & DEPRECATED TAGS
-        $deprecated = ['center', 'font', 'strike', 'u', 'big', 'basefont'];
-        $found_deprecated = [];
-        foreach ($deprecated as $tag) {
-            if ($crawler->filter($tag)->count() > 0) $found_deprecated[] = $tag;
-        }
-        $audit['deprecatedTags'] = [
-            'passed' => empty($found_deprecated),
-            'shortAnswer' => empty($found_deprecated) ? 'No Deprecated Tags' : 'Deprecated Tags Found',
-            'data' => $found_deprecated
-        ];
 
         $audit['inlineCss'] = [
             'passed' => $crawler->filter('[style]')->count() === 0,

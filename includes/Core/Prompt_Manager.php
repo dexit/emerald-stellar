@@ -63,5 +63,34 @@ class Prompt_Manager
                 ]
             ]
         ];
+    /**
+     * Generate content using the WordPress 7.0 AI Connector API.
+     *
+     * @param string $prompt The user prompt.
+     * @param array  $args   Optional arguments (temperature, model preference).
+     * @return string|\WP_Error
+     */
+    public static function generate_with_ai(string $prompt, array $args = [])
+    {
+        if (!function_exists('wp_ai_client_prompt')) {
+            return new \WP_Error('ai_unavailable', __('WordPress AI Connector API is not available.', 'seo-audit'));
+        }
+
+        $client = wp_ai_client_prompt($prompt)
+            ->using_system_instruction(self::get_seo_audit_system_prompt());
+
+        if (isset($args['temperature'])) {
+            $client->using_temperature($args['temperature']);
+        }
+
+        if (isset($args['model_preference'])) {
+            $client->using_model_preference(...(array)$args['model_preference']);
+        }
+
+        if (isset($args['json_schema'])) {
+            return $client->as_json_response($args['json_schema'])->generate_text();
+        }
+
+        return $client->generate_text();
     }
 }

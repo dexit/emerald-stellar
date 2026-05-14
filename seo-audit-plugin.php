@@ -186,9 +186,12 @@ function seo_audit_initialize()
         $loader->register_default_experiments();
         $loader->initialize_experiments();
 
-        // Initialize settings
-        $settings_registration = new \SEOAudit\Settings\Settings_Registration($registry);
-        $settings_registration->init();
+        // Initialize Core Integrations (WordPress 7.0 standards)
+        $meta_registration = new \SEOAudit\Core\Meta_Registration();
+        $meta_registration->init();
+
+        $abilities_integration = new \SEOAudit\Core\Abilities_Integration();
+        $abilities_integration->init();
 
         // Initialize admin settings page
         if (is_admin()) {
@@ -198,6 +201,11 @@ function seo_audit_initialize()
             // Initialize admin dashboard
             $admin_dashboard = new \SEOAudit\Admin\Admin_Dashboard();
             $admin_dashboard->init();
+        }
+
+        // Initialize CLI if running in CLI mode
+        if (defined('WP_CLI') && WP_CLI) {
+            require_once SEO_AUDIT_DIR . 'includes/Core/CLI_Integration.php';
         }
 
         // Initialize Elementor integration if Elementor is active
